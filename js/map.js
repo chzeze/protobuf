@@ -461,12 +461,14 @@ jspb.Map.prototype.serializeBinary = function(
  *    The BinaryReader parsing callback for type V, if V is a message type
  *
  * @param {K=} opt_defaultKey
- *    The default value for the type of map keys. Accepting map
- *    entries with unset keys is required for maps to be backwards compatible
- *    with the repeated message representation described here: goo.gl/zuoLAC
+ *    The default value for the type of map keys. Accepting map entries with
+ *    unset keys is required for maps to be backwards compatible with the
+ *    repeated message representation described here: goo.gl/zuoLAC
  *
  * @param {V=} opt_defaultValue
- *    The default value for the type of map values.
+ *    The default value for the type of map values. Accepting map entries with
+ *    unset values is required for maps to be backwards compatible with the
+ *    repeated message representation described here: goo.gl/zuoLAC
  *
  */
 jspb.Map.deserializeBinary = function(map, reader, keyReaderFn, valueReaderFn,
@@ -488,7 +490,11 @@ jspb.Map.deserializeBinary = function(map, reader, keyReaderFn, valueReaderFn,
       // Value.
       if (map.valueCtor_) {
         goog.asserts.assert(opt_valueReaderCallback);
-        value = new map.valueCtor_();
+        if (!value) {
+          // Old generator still doesn't provide default value message.
+          // Need this for backward compatibility.
+          value = new map.valueCtor_();
+        }
         valueReaderFn.call(reader, value, opt_valueReaderCallback);
       } else {
         value =

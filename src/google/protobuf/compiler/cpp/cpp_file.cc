@@ -414,7 +414,7 @@ void FileGenerator::GenerateSourceIncludes(io::Printer* printer) {
   if (IsProto2MessageSetFile(file_, options_)) {
     format(
         // Implementation of proto1 MessageSet API methods.
-        "#include \"net/proto2/bridge/internal/message_set_util.h\"\n");
+        "#include \"net/proto2/internal/message_set_util.h\"\n");
   }
 
   if (options_.proto_h) {
@@ -591,10 +591,6 @@ void FileGenerator::GenerateSourceForMessage(int idx, io::Printer* printer) {
 
     // Define default instances
     GenerateSourceDefaultInstance(idx, printer);
-    if (options_.lite_implicit_weak_fields) {
-      format("void $1$_ReferenceStrong() {}\n",
-             message_generators_[idx]->classname_);
-    }
 
     // Generate classes.
     format("\n");
@@ -665,10 +661,6 @@ void FileGenerator::GenerateSource(io::Printer* printer) {
     // Define default instances
     for (int i = 0; i < message_generators_.size(); i++) {
       GenerateSourceDefaultInstance(i, printer);
-      if (options_.lite_implicit_weak_fields) {
-        format("void $1$_ReferenceStrong() {}\n",
-               message_generators_[i]->classname_);
-      }
     }
   }
 
@@ -926,8 +918,8 @@ void FileGenerator::GenerateReflectionInitializationCode(io::Printer* printer) {
   if (file_->name() != "net/proto2/proto/descriptor.proto") {
     format(
         "// Force running AddDescriptors() at dynamic initialization time.\n"
-        "static bool $1$ = ("
-        "  ::$proto_ns$::internal::AddDescriptors(&$desc_table$), true);\n",
+        "static bool $1$ = (static_cast<void>("
+        "::$proto_ns$::internal::AddDescriptors(&$desc_table$)), true);\n",
         UniqueName("dynamic_init_dummy", file_, options_));
   }
 }
@@ -1159,9 +1151,6 @@ class FileGenerator::ForwardDeclarations {
           "$dllexport_decl $extern $3$ $4$;\n",
           class_desc, classname, DefaultInstanceType(class_desc, options),
           DefaultInstanceName(class_desc, options));
-      if (options.lite_implicit_weak_fields) {
-        format("void $1$_ReferenceStrong();\n", classname);
-      }
     }
   }
 
@@ -1367,10 +1356,6 @@ void FileGenerator::GenerateLibraryIncludes(io::Printer* printer) {
 
   if (UseUnknownFieldSet(file_, options_) && !message_generators_.empty()) {
     IncludeFile("net/proto2/public/unknown_field_set.h", printer);
-  }
-
-  if (IsAnyMessage(file_, options_)) {
-    IncludeFile("net/proto2/internal/any.h", printer);
   }
 }
 

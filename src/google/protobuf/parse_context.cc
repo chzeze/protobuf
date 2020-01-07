@@ -119,8 +119,7 @@ const char* EpsCopyInputStream::Next(int overrun, int d) {
     const void* data;
     // ZeroCopyInputStream indicates Next may return 0 size buffers. Hence
     // we loop.
-    while (zcis_->Next(&data, &size_)) {
-      overall_limit_ -= size_;
+    while (StreamNext(&data)) {
       if (size_ > kSlopBytes) {
         // We got a large chunk
         std::memcpy(buffer_ + kSlopBytes, data, kSlopBytes);
@@ -198,22 +197,25 @@ const char* EpsCopyInputStream::SkipFallback(const char* ptr, int size) {
 }
 
 const char* EpsCopyInputStream::ReadStringFallback(const char* ptr, int size,
-                                                   std::string* s) {
-  s->clear();
-  // TODO(gerbens) assess security. At the moment its parity with
-  // CodedInputStream but it allows a payload to reserve large memory.
+                                                   std::string* str) {
+  str->clear();
   if (PROTOBUF_PREDICT_TRUE(size <= buffer_end_ - ptr + limit_)) {
-    s->reserve(size);
+    // Reserve the string up to a static safe size. If strings are bigger than
+    // this we proceed by growing the string as needed. This protects against
+    // malicious payloads making protobuf hold on to a lot of memory.
+    str->reserve(str->size() + std::min<int>(size, kSafeStringSize));
   }
-  return AppendStringFallback(ptr, size, s);
+  return AppendSize(ptr, size,
+                    [str](const char* p, int s) { str->append(p, s); });
 }
 
 const char* EpsCopyInputStream::AppendStringFallback(const char* ptr, int size,
                                                      std::string* str) {
-  // TODO(gerbens) assess security. At the moment its parity with
-  // CodedInputStream but it allows a payload to reserve large memory.
   if (PROTOBUF_PREDICT_TRUE(size <= buffer_end_ - ptr + limit_)) {
-    str->reserve(size);
+    // Reserve the string up to a static safe size. If strings are bigger than
+    // this we proceed by growing the string as needed. This protects against
+    // malicious payloads making protobuf hold on to a lot of memory.
+    str->reserve(str->size() + std::min<int>(size, kSafeStringSize));
   }
   return AppendSize(ptr, size,
                     [str](const char* p, int s) { str->append(p, s); });
@@ -310,7 +312,6 @@ const char* EpsCopyInputStream::InitFrom(io::ZeroCopyInputStream* zcis) {
   return buffer_;
 }
 
-#if GOOGLE_PROTOBUF_ENABLE_EXPERIMENTAL_PARSER
 const char* ParseContext::ParseMessage(MessageLite* msg, const char* ptr) {
   return ParseMessage<MessageLite>(msg, ptr);
 }
@@ -318,7 +319,6 @@ const char* ParseContext::ParseMessage(Message* msg, const char* ptr) {
   // Use reinterptret case to prevent inclusion of non lite header
   return ParseMessage(reinterpret_cast<MessageLite*>(msg), ptr);
 }
-#endif
 
 inline void WriteVarint(uint64 val, std::string* s) {
   while (val >= 128) {
@@ -425,14 +425,6 @@ const char* InlineGreedyStringParser(std::string* s, const char* ptr,
   int size = ReadSize(&ptr);
   if (!ptr) return nullptr;
   return ctx->ReadString(ptr, size, s);
-}
-
-const char* InlineGreedyStringParserUTF8(std::string* s, const char* ptr,
-                                         ParseContext* ctx,
-                                         const char* field_name) {
-  auto p = InlineGreedyStringParser(s, ptr, ctx);
-  GOOGLE_PROTOBUF_PARSER_ASSERT(VerifyUTF8(*s, field_name));
-  return p;
 }
 
 

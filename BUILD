@@ -3,6 +3,7 @@
 load("@rules_cc//cc:defs.bzl", "cc_binary", "cc_library", "cc_test", "objc_library")
 load("@rules_java//java:defs.bzl", "java_library")
 load("@rules_proto//proto:defs.bzl", "proto_lang_toolchain", "proto_library")
+load("@rules_python//python:defs.bzl", "py_library")
 
 licenses(["notice"])
 
@@ -58,6 +59,7 @@ COPTS = select({
         "-Wno-unused-function",
         # Prevents ISO C++ const string assignment warnings for pyext sources.
         "-Wno-write-strings",
+        "-Wno-deprecated-declarations",
     ],
 })
 
@@ -188,7 +190,6 @@ cc_library(
         "src/google/protobuf/service.cc",
         "src/google/protobuf/source_context.pb.cc",
         "src/google/protobuf/struct.pb.cc",
-        "src/google/protobuf/stubs/mathlimits.cc",
         "src/google/protobuf/stubs/substitute.cc",
         "src/google/protobuf/text_format.cc",
         "src/google/protobuf/timestamp.pb.cc",
@@ -405,25 +406,7 @@ cc_library(
     ],
     copts = COPTS,
     includes = ["src/"],
-    linkopts = LINK_OPTS + select({
-        ":msvc": [
-            # Linking to setargv.obj makes the default command line argument
-            # parser expand wildcards, so the main method's argv will contain the
-            # expanded list instead of the wildcards.
-            #
-            # Adding dummy "-DEFAULTLIB:kernel32.lib", because:
-            # - Microsoft ships this object file next to default libraries
-            # - but this file is not a library, just a precompiled object
-            # - "-WHOLEARCHIVE" and "-DEFAULTLIB" only accept library,
-            #   not precompiled object.
-            # - Bazel would assume linkopt that does not start with "-" or "$"
-            #   as a label to a target, so we add a harmless "-DEFAULTLIB:kernel32.lib"
-            #   before "setargv.obj".
-            # See https://msdn.microsoft.com/en-us/library/8bch7bkk.aspx
-            "-DEFAULTLIB:kernel32.lib setargv.obj",
-        ],
-        "//conditions:default": [],
-    }),
+    linkopts = LINK_OPTS,
     visibility = ["//visibility:public"],
     deps = [":protobuf"],
 )
@@ -805,12 +788,9 @@ py_library(
     name = "python_srcs",
     srcs = glob(
         [
-            "python/google/__init__.py",
-            "python/google/protobuf/*.py",
-            "python/google/protobuf/**/*.py",
+            "python/google/**/*.py",
         ],
         exclude = [
-            "python/google/protobuf/__init__.py",
             "python/google/protobuf/**/__init__.py",
             "python/google/protobuf/internal/*_test.py",
             "python/google/protobuf/internal/test_util.py",
@@ -1018,6 +998,13 @@ proto_lang_toolchain(
     name = "java_toolchain",
     command_line = "--java_out=$(OUT)",
     runtime = ":protobuf_java",
+    visibility = ["//visibility:public"],
+)
+
+proto_lang_toolchain(
+    name = "javalite_toolchain",
+    command_line = "--java_out=lite:$(OUT)",
+    runtime = ":protobuf_javalite",
     visibility = ["//visibility:public"],
 )
 
